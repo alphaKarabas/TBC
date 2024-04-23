@@ -1,0 +1,20 @@
+{
+  "serverPort": 5000,
+  "authtoken": "2IVdOTrlaJbRsnnbmu8zIL7emjH_4SEM9aACeks2P8zmoXGJr",
+  "dbUrl": "mongodb://127.0.0.1/tBotMongo",
+  "extensionsDbServer": "mongodb://127.0.0.1",
+  "secretJWTKey": "4cHtqm3yGWftWaRr",
+  "pathToExtensions": "./Extensions",
+  "defaultExtensions": [
+    {
+      "_id": "6339844f32af59ee47609652",
+      "userId": "6320f52eedcce77b11909db4",
+      "name": "BACE",
+      "isActive": true,
+      "path": "/BACE"
+    }
+  ],
+  "defaultBotExtensions": [
+    "6339844f32af59ee47609652"
+  ]
+}

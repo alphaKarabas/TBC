@@ -1,0 +1,39 @@
+version: '3'
+
+services:
+  frontend:
+    build: ./frontend
+    container_name: t-bot-frontend
+    ports:
+      - '3000:3000'
+    stdin_open: true
+    networks:
+      - bot-net
+    tty: true  
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: t-bot-backend
+    restart: always
+    ports:
+      - "5000:5000"
+    networks:
+      - bot-net
+  db:
+    image: mongo:4.4
+    container_name: mongodb-server
+    restart: always
+    ports:
+      - '27020:27017'
+    volumes:  
+      - tBotMongo:/data/db 
+    networks:
+      - bot-net
+
+networks:
+  bot-net:
+    driver: bridge
+
+volumes:
+  tBotMongo:

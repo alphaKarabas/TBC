@@ -1,0 +1,45 @@
+import { NodeProvider, useNodeActions } from "./NodeProvider";
+
+const NodeTypeContainer = ({ NodeType, data, nodeInfo }) => {
+  const { deleteNode } = useNodeActions();
+  return (
+    <div className="node">
+      <div
+        className="custom-drag-handle"
+        style={{
+          display: "flex",
+          justifyContent: "end",
+          marginBottom: "5px",
+        }}
+      >
+        <span style={{ fontSize: "10px", fontWeight: "700", marginRight: "auto" }}>
+          {data?.privateData?.moduleId}
+        </span>
+        <button
+          style={{
+            borderRadius: "100%",
+            width: "14px",
+            height: "14px",
+            backgroundColor: "#ff5454",
+          }}
+          onClick={() => deleteNode()}
+        ></button>
+      </div>
+      <div>
+        <NodeType id={nodeInfo.id} data={data.publicData} nodeInfo={nodeInfo} />
+      </div>
+    </div>
+  );
+};
+
+const wrapeNodeType = (NodeType) => {
+  return ({ data, ...nodeInfo }) => {
+    return (
+      <NodeProvider id={nodeInfo.id}>
+        <NodeTypeContainer NodeType={NodeType} data={data} nodeInfo={nodeInfo} />
+      </NodeProvider>
+    );
+  };
+};
+
+export default wrapeNodeType;

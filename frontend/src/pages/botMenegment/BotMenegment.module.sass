@@ -1,0 +1,17 @@
+.wrapper
+  background-color: #fff
+  color: #000
+  width: 100vw
+  height: 100vh
+
+.grid
+  width: 100%
+  height: 100%
+  display: grid
+  grid-template-columns: 250px minmax(260px, 1fr) auto
+  grid-template-rows: 60px auto
+  grid-template-areas: "logo nav-bar user" "main main main"
+
+.main
+  grid-area: main
+
