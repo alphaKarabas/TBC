@@ -3,7 +3,6 @@ import { useSelector, useDispatch } from "react-redux";
 import styles from "./User.module.sass";
 import Dropdown from "../../Dropdown";
 import { logout } from "../../../../store/UserSlice";
-import { resetAdminData } from "../../../../store/AdminListSlice";
 import { resetBotListData } from "../../../../store/BotListSlice";
 import { resetFlowData } from "../../../../store/FlowSlice";
 
@@ -20,7 +19,6 @@ export default function User() {
               dispatch(logout());
               dispatch(resetFlowData());
               dispatch(resetBotListData());
-              dispatch(resetAdminData());
             }}
             className={styles["menu-item"]}
           >

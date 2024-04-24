@@ -2,7 +2,6 @@ import React, { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import styles from "./BotPanel.module.sass";
 import ControleButtons from "./ControleButtons";
-import AdminList from "./AdminList";
 
 export default function BotPanel() {
   const currentBotId = useSelector((state) => state.BotListSlice.currentBotId);
@@ -34,11 +33,6 @@ export default function BotPanel() {
                     </h3>
                     <ControleButtons currentBot={currentBot} />
                   </div>
-                </th>
-              </tr>
-              <tr>
-                <th className={styles.wrapper}>
-                  <AdminList currentBot={currentBot} />
                 </th>
               </tr>
             </tbody>
