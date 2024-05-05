@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { collectAvailableDataLinksByTypes, updateUsedKeys } from '../../store/FlowSlice';
+import { updateUsedKeys } from '../../store/FlowAsyncThunks';
+import { collectAvailableDataOn } from '../../dataTreeMethods';
 import { useSelector, useDispatch } from "react-redux";
 
 function useAllAvailableData(id, inputKey) {
@@ -12,6 +13,7 @@ function useAllAvailableData(id, inputKey) {
 
   const setData = (type, name) => {
     const newUsedKeys = dataTree[id].usedKeys.filter(usedKey => usedKey.inputKey != inputKey)
+    console.log(availableData);
     if (!type || !name) {
       setDataName('');
       setDataType('');
@@ -20,20 +22,24 @@ function useAllAvailableData(id, inputKey) {
     else {
       newUsedKeys.push({ ...availableData[type][name], inputKey, 'state': 'connected' })
     }
+    console.log(type, name, { id, usedKeys: newUsedKeys });
+
     dispatch(updateUsedKeys({ id, usedKeys: newUsedKeys }))
   }
 
   useEffect(() => {
-    const newAvailableData = collectAvailableDataLinksByTypes(dataTree, id);
-
+    const data = collectAvailableDataOn(dataTree, id, 'target');
     if (usedKey.state == 'connected') {
-      const newName = dataTree[usedKey.sourceId].outputKeys[usedKey.outputKey].name;
+
+      // const newName = dataTree[usedKey.sourceId].outputKeys[usedKey.outputKey].name;
+
+      const newName = usedKey.name;
       const newType = usedKey.type;
       setDataName(newName);
       setDataType(newType);
     }
 
-    setAvailableData(newAvailableData);
+    setAvailableData(data);
   }, [dataTree, id, inputKey]);
 
   return [dataName, dataType, availableData, setData];

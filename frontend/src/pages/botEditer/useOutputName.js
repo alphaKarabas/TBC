@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { updateOutputKeys, renameUsedKeys, getAllChildrenId, changeUsedKeysState } from '../../store/FlowSlice';
+import { updateOutputKeys, updateChildren } from '../../store/FlowAsyncThunks';
 import moduleDataTypes from "./moduleDataTypes";
 import { useSelector, useDispatch } from "react-redux";
 
@@ -9,43 +9,27 @@ function useOutputName(id, outputKey) {
   const [inUse, setDatInUse] = useState(false);
   const dataTree = useSelector((state) => state.FlowSlice.dataTree);
 
-  const setName = (name) => {
+  const setName = async (name) => {
     const node = dataTree[id]
     if (!moduleDataTypes[node.moduleId].outputs.find(output => output.key == outputKey)) return
 
     const newoutputKeys = { ...node.outputKeys };
     newoutputKeys[outputKey] = { name, inUse }
-    dispatch(updateOutputKeys({ id, outputKeys: newoutputKeys }))
-
-    const childrenId = getAllChildrenId(dataTree, id);
-    dispatch(renameUsedKeys({ nodeIds: childrenId, links:[`${id}_${outputKey}`], name }))
+    await dispatch(updateOutputKeys({ id, outputKeys: newoutputKeys }))
+    dispatch(updateChildren({ nodeId: id }))
   }
 
-  const setInUse = (inUse) => {
+  const setInUse = async (inUse) => {
     const node = dataTree[id]
     if (!moduleDataTypes[node.moduleId].outputs.find(output => output.key == outputKey)) return
 
     const newoutputKeys = { ...node.outputKeys };
     newoutputKeys[outputKey] = { name, inUse }
-    dispatch(updateOutputKeys({ id, outputKeys: newoutputKeys }))
-    const childrenId = getAllChildrenId(dataTree, id);
-    if (inUse) {
-      dispatch(changeUsedKeysState({ 
-        nodeIds: childrenId,
-        links: [`${id}_${outputKey}`],
-        state: 'connected'
-      }))
-    } else {
-      dispatch(changeUsedKeysState({ 
-        nodeIds: childrenId,
-        links: [`${id}_${outputKey}`],
-        state: 'disconnected'
-      }))
-    }
+    await dispatch(updateOutputKeys({ id, outputKeys: newoutputKeys }))
+    dispatch(updateChildren({ nodeId: id }))
   }
 
   useEffect(() => {
-    console.log('useOutputName', id);
     const node = dataTree[id]
     const outputKeys = node.outputKeys;
     if (!outputKey) return;

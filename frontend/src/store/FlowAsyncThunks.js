@@ -1,6 +1,6 @@
 import axios from "axios";
 import { createAsyncThunk } from "@reduxjs/toolkit";
-import { getConnectUpdates, getDisconnectUpdate } from "../dataTreeMethods";
+import { getBranchUpdate, getChildrenUpdate } from "../dataTreeMethods";
 import moduleDataTypes from "../pages/botEditer/moduleDataTypes";
 import moduleDefaultHandles from "../pages/botEditer/moduleDefaultHandles";
 
@@ -147,47 +147,23 @@ export const addEdge = createAsyncThunk(
   "flow/fetchAddEdge",
   async ({ flowId, edge }) => {
     try {
+      const newEdge = {
+        flowId: flowId,
+        source: edge.source,
+        sourceKey: edge.sourceHandle,
+        target: edge.target,
+        targetKey: edge.targetHandle,
+      }
       const response = await axios.post(
         `${process.env.React_App_SERVER_URL}/api/flow/edge`,
-        {
-          flowId: flowId,
-          source: edge.source,
-          sourceKey: edge.sourceHandle,
-          target: edge.target,
-          targetKey: edge.targetHandle,
-        },
+        newEdge,
         {
           headers: {
             Authorization: `Bearer ${localStorage.getItem("JWT_Token")}`,
           },
         }
       );
-
-      return { edge: edge, data: response.data };
-    } catch (e) {
-      console.log(e);
-    }
-  }
-);
-
-export const updateConnect = createAsyncThunk(
-  "flow/fetchUpdateConnect",
-  async ({ sourceId, targetId }, { getState }) => {
-    try {
-      const dataTree = getState().FlowSlice.dataTree;
-      const updates = getConnectUpdates(dataTree, sourceId, targetId)
-      console.log(updates);
-      await axios.patch(
-        `${process.env.React_App_SERVER_URL}/api/flow/node/used-keys/set`,
-        { updates },
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("JWT_Token")}`,
-          },
-        }
-      );
-
-      return { updates };
+      return { edge: {...newEdge, _id: response.data.id}, data: response.data };
     } catch (e) {
       console.log(e);
     }
@@ -237,13 +213,13 @@ export const updateOutputKeys = createAsyncThunk(
   }
 );
 
-export const renameUsedKeys = createAsyncThunk(
-  "flow/fetchRenameUsedKeys",
-  async ({ nodeIds, links, name }) => {
+export const updateHandles = createAsyncThunk(
+  "flow/fetchUpdateHandles",
+  async ({ id, handles }) => {
     try {
       await axios.patch(
-        `${process.env.React_App_SERVER_URL}/api/flow/node/used-keys/rename`,
-        { nodeIds, links, name },
+        `${process.env.React_App_SERVER_URL}/api/flow/node/${id}/handles`,
+        { handles },
         {
           headers: {
             Authorization: `Bearer ${localStorage.getItem("JWT_Token")}`,
@@ -251,7 +227,71 @@ export const renameUsedKeys = createAsyncThunk(
         }
       );
 
-      return { nodeIds, links, name };
+      return { id, handles };
+    } catch (e) {
+      console.log(e);
+    }
+  }
+);
+
+export const updateBranch = createAsyncThunk(
+  "flow/fetchUpdateBranch",
+  async ({ nodeId, edgeId }, { getState }) => {
+    try {
+      const dataTree = getState().FlowSlice.dataTree;
+      const { usedKeys, flow } = getBranchUpdate(dataTree, nodeId, edgeId)
+      await axios.patch(
+        `${process.env.React_App_SERVER_URL}/api/flow/node/used-keys/set`,
+        { updates: usedKeys },
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("JWT_Token")}`,
+          },
+        }
+      );
+      await axios.patch(
+        `${process.env.React_App_SERVER_URL}/api/flow/edge/flow/set`,
+        { updates: flow },
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("JWT_Token")}`,
+          },
+        }
+      );
+
+      return { usedKeys, flow };
+    } catch (e) {
+      console.log(e);
+    }
+  }
+);
+
+export const updateChildren = createAsyncThunk(
+  "flow/fetchUpdateChildren",
+  async ({ nodeId }, { getState }) => {
+    try {
+      const dataTree = getState().FlowSlice.dataTree;
+      const { usedKeys, flow } = getChildrenUpdate(dataTree, nodeId)
+      await axios.patch(
+        `${process.env.React_App_SERVER_URL}/api/flow/node/used-keys/set`,
+        { updates: usedKeys },
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("JWT_Token")}`,
+          },
+        }
+      );
+      await axios.patch(
+        `${process.env.React_App_SERVER_URL}/api/flow/edge/flow/set`,
+        { updates: flow },
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("JWT_Token")}`,
+          },
+        }
+      );
+
+      return { usedKeys, flow };
     } catch (e) {
       console.log(e);
     }
@@ -273,29 +313,6 @@ export const changeUsedKeysState = createAsyncThunk(
       );
 
       return { nodeIds, links, state };
-    } catch (e) {
-      console.log(e);
-    }
-  }
-);
-
-export const updateDisconnect = createAsyncThunk(
-  "flow/fetchupdateDisconnect",
-  async ({ sourceId, targetId }, { getState }) => {
-    try {
-      const dataTree = getState().FlowSlice.dataTree;
-      const update = getDisconnectUpdate(dataTree, sourceId, targetId)
-      await axios.patch(
-        `${process.env.React_App_SERVER_URL}/api/flow/node/used-keys/change-state`,
-        update,
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("JWT_Token")}`,
-          },
-        }
-      );
-
-      return update;
     } catch (e) {
       console.log(e);
     }

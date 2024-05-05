@@ -1,559 +1,15 @@
 import { createSlice } from "@reduxjs/toolkit";
-import axios from "axios";
-import { createAsyncThunk } from "@reduxjs/toolkit";
-import { applyEdgeChanges, applyNodeChanges, updateEdge } from "reactflow";
+import { applyEdgeChanges, applyNodeChanges } from "reactflow";
 import moduleDataTypes from "../pages/botEditer/moduleDataTypes";
 import moduleDefaultHandles from "../pages/botEditer/moduleDefaultHandles";
-
-function buildTree(nodes, edges) {
-  const tree = {};
-
-  nodes.forEach(node => {
-    tree[node._id] = {
-      outputKeys: node.outputKeys,
-      usedKeys: node.usedKeys,
-      moduleId: node.moduleId,
-      handles: node.handles,
-      parents: [],
-      children: [],
-      new: node.new
-    };
-  });
-
-  edges.forEach(edge => {
-    const target = tree[edge.target];
-    const source = tree[edge.source];
-
-    if (!target || !source) {
-      console.error("Target or source not found for edge:", edge);
-      return;
-    }
-
-    target.parents.push({
-      id: edge.source,
-      sourceKey: edge.sourceKey
-    });
-
-    source.children.push({
-      id: edge.target,
-      targetKey: edge.targetKey
-    });
-  });
-
-  return tree;
-}
-
-export function getOutputDataLinksByTypes(dataTree, id) {
-  let dataLinksByTypes = {};
-
-  const nodeData = dataTree[id];
-  if (!nodeData) return;
-  console.log(dataTree);
-
-  const outputDataTypes = moduleDataTypes[nodeData.moduleId].outputs;
-  console.log(outputDataTypes);
-
-  outputDataTypes.forEach(outputDataType => {
-    const key = outputDataType.key;
-    const typeKey = outputDataType.type;
-
-    if (!nodeData.outputKeys[key].inUse) return;
-    if (!dataLinksByTypes[typeKey]) dataLinksByTypes[typeKey] = {};
-
-    dataLinksByTypes[typeKey][nodeData.outputKeys[key].name] = {
-      'link': `${id}_${key}`,
-      'sourceId': id,
-      'outputKey': key,
-      'type': typeKey,
-      'name': nodeData.outputKeys[key].name
-    };
-
-  });
-
-  return dataLinksByTypes
-}
-
-function concatDataLinksByTypes(oldDataLinksByTypes, newDataLinksByTypes) {
-  const dataLinksByTypes = { ...oldDataLinksByTypes }
-  Object.keys(newDataLinksByTypes).forEach(type => {
-    if (!dataLinksByTypes[type]) dataLinksByTypes[type] = {};
-    dataLinksByTypes[type] = {
-      ...dataLinksByTypes[type],
-      ...newDataLinksByTypes[type]
-    }
-  })
-  return dataLinksByTypes;
-}
-
-export function collectAvailableDataLinksByTypes(dataTree, startNodeId) {
-  let dataLinksByTypes = {};
-  function recurse(nodeId) {
-    const node = dataTree[nodeId];
-    if (!node || node.parents.length === 0) return;
-    node.parents.forEach(parent => {
-      recurse(parent.id);
-
-      const newDataLinksByTypes = getOutputDataLinksByTypes(dataTree, parent.id);
-      dataLinksByTypes = concatDataLinksByTypes(dataLinksByTypes, newDataLinksByTypes)
-    });
-  }
-
-  if (startNodeId) {
-    recurse(startNodeId);
-  }
-
-  return dataLinksByTypes;
-}
-
-function getOutputDataLinks(dataTree, id) {
-  const dataLinks = [];
-  const nodeData = dataTree[id];
-  if (!nodeData) return;
-  const outputDataTypes = moduleDataTypes[nodeData.moduleId].outputs;
-
-  outputDataTypes.forEach(outputDataType => {
-    const key = outputDataType.key;
-    dataLinks.push(`${id}_${key}`)
-  });
-
-  return dataLinks
-}
-
-function collectAvailableDataLinks(dataTree, startNodeId) {
-  let dataLinks = [];
-
-  function recurse(nodeId) {
-    const node = dataTree[nodeId];
-    if (!node || node.parents.length === 0) return;
-
-    node.parents.forEach(parent => {
-      dataLinks = dataLinks.concat(getOutputDataLinks(dataTree, parent.id))
-      recurse(parent.id);
-    });
-  }
-
-  if (startNodeId) {
-    recurse(startNodeId);
-  }
-
-  return dataLinks;
-}
-
-function DataLinksByTypesToDataLinks(dataLinksByTypes) {
-  const dataLinks = []
-  Object.keys(dataLinksByTypes).map(type => {
-    Object.keys(dataLinksByTypes[type]).map(name => {
-      dataLinks.push({
-        ...dataLinksByTypes[type][name],
-        'name': name,
-        'type': type
-      })
-    })
-  })
-  return dataLinks
-}
-
-function chooseDataLink(dataLinksByNames) {
-  return dataLinksByNames[Object.keys(dataLinksByNames).pop()]
-}
-
-export function autoChooseDataLink(dataTree, nodsIds, dataLinksByTypes) {
-  return nodsIds.map(id => {
-    const node = dataTree[id]
-    const usedKeys = node.usedKeys.map(usedKey => {
-      if (usedKey.state == 'connected') return usedKey;
-      if (!usedKey.type) return usedKey
-      if (node.new)
-        return { ...chooseDataLink(dataLinksByTypes[usedKey.type]), ...usedKey }
-      if (dataLinksByTypes[usedKey.type] && dataLinksByTypes[usedKey.type][usedKey.name])
-        return { ...dataLinksByTypes[usedKey.type][usedKey.name], ...usedKey }
-      return usedKey
-    })
-    return { nodeId: id, usedKeys }
-  })
-}
-
-export function getAllChildrenId(dataTree, startNodeId) {
-  let childrenId = [];
-
-  function recurse(nodeId) {
-    const node = dataTree[nodeId];
-    if (node?.children.length === 0) return;
-
-    node.children.forEach(child => {
-      childrenId.push(child.id)
-      recurse(child.id);
-    });
-  }
-
-  if (startNodeId) {
-    recurse(startNodeId);
-  }
-
-  return childrenId;
-}
-
-export const loadFlow = createAsyncThunk(
-  "flow/fetchFlow",
-  async ({ id, page }) => {
-    try {
-      const response = await axios.get(
-        `${process.env.React_App_SERVER_URL}/api/flow?id=${id}&page=${page}`,
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("JWT_Token")}`,
-          },
-        }
-      );
-      return response.data;
-    } catch (e) {
-      console.log(e.response.data.message);
-    }
-  }
-);
-
-export const changePublicNodeData = createAsyncThunk(
-  "flow/fetchChangePublicNodeData",
-  async ({ id, data }) => {
-    try {
-      const adoptedData = {
-        id: id,
-        data: data,
-      };
-      const response = await axios.patch(
-        `${process.env.React_App_SERVER_URL}/api/flow/node/${id}/data`,
-        { data },
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("JWT_Token")}`,
-          },
-        }
-      );
-      return { data: response.data, node: adoptedData, id: id };
-    } catch (e) {
-      console.log(e.response.data.message);
-    }
-  }
-);
-
-export const addNode = createAsyncThunk(
-  "flow/fetchAddNode",
-  async ({ node }) => {
-    try {
-      const inputs = moduleDataTypes[node.data.privateData.moduleId].inputs
-      const usedKeys = inputs.map(input => ({ 'inputKey': input.key, 'type': input.type, 'state': 'not-serialized' }))
-
-      const response = await axios.post(
-        `${process.env.React_App_SERVER_URL}/api/flow/node`,
-        {
-          flowId: node.data.privateData.flowId,
-          moduleId: node.data.privateData.moduleId,
-          outputKeys: node.data.privateData.outputKeys,
-          usedKeys: usedKeys,
-          data: node.data.publicData,
-          position: node.position,
-          handles: moduleDefaultHandles[node.data.privateData.moduleId]
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("JWT_Token")}`,
-          },
-        }
-      );
-      return { data: response.data, node: node };
-    } catch (e) {
-      console.log(e);
-    }
-  }
-);
-
-export const deleteNode = createAsyncThunk(
-  "flow/fetchDeleteNode",
-  async ({ id }) => {
-    try {
-      const response = await axios.delete(
-        `${process.env.React_App_SERVER_URL}/api/flow/node/${id}`,
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("JWT_Token")}`,
-          },
-        }
-      );
-      return { data: response.data, id: id };
-    } catch (e) {
-      console.log(e.response.data.message);
-    }
-  }
-);
-
-export const savePosition = createAsyncThunk(
-  "flow/fetchSavePosition",
-  async ({ id, xPos, yPos }) => {
-    try {
-      await axios.patch(
-        `${process.env.React_App_SERVER_URL}/api/flow/node/${id}/position`,
-        {
-          xPos: xPos,
-          yPos: yPos,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("JWT_Token")}`,
-          },
-        }
-      );
-    } catch (e) {
-      console.log(e.response.data.message);
-    }
-  }
-);
-
-export const saveViewportPosition = createAsyncThunk(
-  "flow/fetchSaveViewportPosition",
-  async ({ id, x, y, zoom }) => {
-    try {
-      const response = await axios.patch(
-        `${process.env.React_App_SERVER_URL}/api/flow?id=${id}`,
-        {
-          x: x,
-          y: y,
-          zoom: zoom,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("JWT_Token")}`,
-          },
-        }
-      );
-      return { x, y, zoom };
-    } catch (e) {
-      console.log(e.response.data.message);
-    }
-  }
-);
-
-export const addEdge = createAsyncThunk(
-  "flow/fetchAddEdge",
-  async ({ flowId, edge }) => {
-    try {
-      const response = await axios.post(
-        `${process.env.React_App_SERVER_URL}/api/flow/edge`,
-        {
-          flowId: flowId,
-          source: edge.source,
-          sourceKey: edge.sourceHandle,
-          target: edge.target,
-          targetKey: edge.targetHandle,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("JWT_Token")}`,
-          },
-        }
-      );
-
-      return { edge: edge, data: response.data };
-    } catch (e) {
-      console.log(e);
-    }
-  }
-);
-
-
-function addStateToUsedKey(usedKey, state) {
-  const resState = usedKey.type ? state : 'serialized'
-  return { ...usedKey, state: resState }
-}
-
-export const autoSetUsedKeys = createAsyncThunk(
-  "flow/fetchAutoSetUsedKeys",
-  async ({ sourceId, targetId }, { getState }) => {
-    try {
-      const dataTree = getState().FlowSlice.dataTree;
-      const childrenIds = getAllChildrenId(dataTree, targetId).concat(targetId);
-      let dataLinksByTypes = collectAvailableDataLinksByTypes(dataTree, sourceId)
-      const sourceNode = dataTree[targetId].parents.find(parent => parent.id == sourceId)
-      const sourceNodeDataLinks = getOutputDataLinksByTypes(dataTree, sourceNode.id)
-      dataLinksByTypes = concatDataLinksByTypes(dataLinksByTypes, sourceNodeDataLinks)
-      const chooseUsedKeys = autoChooseDataLink(dataTree, childrenIds, dataLinksByTypes);
-      const newUsedKeys = Object.keys(chooseUsedKeys).map(key => {
-        const nodeId = chooseUsedKeys[key].nodeId
-        const usedKeys = chooseUsedKeys[key].usedKeys.map(usedKey => addStateToUsedKey(usedKey, 'connected'))
-        return { nodeId, 'usedKeys': usedKeys }
-      })
-      console.log(newUsedKeys);
-      await axios.patch(
-        `${process.env.React_App_SERVER_URL}/api/flow/node/used-keys/set`,
-        { newUsedKeys },
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("JWT_Token")}`,
-          },
-        }
-      );
-
-      return { newUsedKeys };
-    } catch (e) {
-      console.log(e);
-    }
-  }
-);
-
-export const updateUsedKeys = createAsyncThunk(
-  "flow/fetchUpdateUsedKeys",
-  async ({ id, usedKeys }) => {
-    console.log(usedKeys);
-    try {
-      await axios.patch(
-        `${process.env.React_App_SERVER_URL}/api/flow/node/${id}/used-keys`,
-        { usedKeys },
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("JWT_Token")}`,
-          },
-        }
-      );
-
-      return { id, usedKeys };
-    } catch (e) {
-      console.log(e);
-    }
-  }
-);
-
-export const updateOutputKeys = createAsyncThunk(
-  "flow/fetchUpdateOutputKeys",
-  async ({ id, outputKeys }) => {
-    try {
-      await axios.patch(
-        `${process.env.React_App_SERVER_URL}/api/flow/node/${id}/output-key-names`,
-        { outputKeys },
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("JWT_Token")}`,
-          },
-        }
-      );
-
-      return { id, outputKeys };
-    } catch (e) {
-      console.log(e);
-    }
-  }
-);
-
-export const renameUsedKeys = createAsyncThunk(
-  "flow/fetchRenameUsedKeys",
-  async ({ nodeIds, links, name }) => {
-    try {
-      await axios.patch(
-        `${process.env.React_App_SERVER_URL}/api/flow/node/used-keys/rename`,
-        { nodeIds, links, name },
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("JWT_Token")}`,
-          },
-        }
-      );
-
-      return { nodeIds, links, name };
-    } catch (e) {
-      console.log(e);
-    }
-  }
-);
-
-export const changeUsedKeysState = createAsyncThunk(
-  "flow/fetchChangeUsedKeysState",
-  async ({ nodeIds, links, state }) => {
-    try {
-      await axios.patch(
-        `${process.env.React_App_SERVER_URL}/api/flow/node/used-keys/change-state`,
-        { nodeIds, links, state },
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("JWT_Token")}`,
-          },
-        }
-      );
-
-      return { nodeIds, links, state };
-    } catch (e) {
-      console.log(e);
-    }
-  }
-);
-
-export const detachUsedKeys = createAsyncThunk(
-  "flow/fetchDetachUsedKeys",
-  async ({ sourceId, targetId }, { getState }) => {
-    try {
-      const dataTree = getState().FlowSlice.dataTree;
-      const childrenId = getAllChildrenId(dataTree, targetId).concat(targetId);
-      let links = collectAvailableDataLinks(dataTree, sourceId)
-      const sourceNode = dataTree[targetId].parents.find(parent => parent.id == sourceId)
-      links = links.concat(getOutputDataLinks(dataTree, sourceNode.id))
-      await axios.patch(
-        `${process.env.React_App_SERVER_URL}/api/flow/node/used-keys/change-state`,
-        { nodeIds: childrenId, links: links, state: 'disconnected' },
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("JWT_Token")}`,
-          },
-        }
-      );
-
-      return { nodeIds: childrenId, links, state: 'disconnected' };
-    } catch (e) {
-      console.log(e);
-    }
-  }
-);
-
-export const deleteEdge = createAsyncThunk(
-  "flow/fetchDeleteEdge",
-  async ({ edge }) => {
-    try {
-      await axios.delete(
-        `${process.env.React_App_SERVER_URL}/api/flow/edge?id=${edge.id}`,
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("JWT_Token")}`,
-          },
-        }
-      );
-
-      return { edge };
-    } catch (e) {
-      console.log(e.response.data.message);
-    }
-  }
-);
-
-export const deleteEdgeByNodeIdAndKey = createAsyncThunk(
-  "flow/fetchDeleteEdgeByNodeIdAndKey",
-  async ({ id, key }) => {
-    try {
-      const response = await axios.delete(
-        `${process.env.React_App_SERVER_URL}/api/flow/edge?nodeId=${id}&key=${key}`,
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("JWT_Token")}`,
-          },
-        }
-      );
-
-      return { id: id, key: key, data: response.data };
-    } catch (e) {
-      console.log(e.response.data.message);
-    }
-  }
-);
+import { buildTree } from "../dataTreeMethods";
+import * as FlowAsyncThunks from "./FlowAsyncThunks"
 
 const FlowSlice = createSlice({
   name: "reactFlow",
   initialState: {
     flowId: "",
+    selectedNodeId: null,
     viewportPosition: {},
     page: {},
     nodes: [],
@@ -563,7 +19,7 @@ const FlowSlice = createSlice({
     // сonnectionRules: [],
   },
   extraReducers: {
-    [loadFlow.fulfilled]: (state, action) => {
+    [FlowAsyncThunks.loadFlow.fulfilled]: (state, action) => {
       if (!action?.payload) return;
       const { id, nodes, edges, viewportPosition, page } = action?.payload?.flow;
       if (!id || !nodes || !edges) return;
@@ -595,7 +51,9 @@ const FlowSlice = createSlice({
           id: edge._id,
           source: edge.source,
           target: edge.target,
-          data: { flowId: edge.flowId },
+          data: { 
+            flowId: edge.flowId
+          },
           sourceHandle: edge.sourceKey,
           targetHandle: edge.targetKey,
         };
@@ -609,12 +67,12 @@ const FlowSlice = createSlice({
       state.dataTree = buildTree(nodes, edges);
       state.isLoaded = true
     },
-    [saveViewportPosition.fulfilled]: (state, action) => {
+    [FlowAsyncThunks.saveViewportPosition.fulfilled]: (state, action) => {
       if (!action?.payload) return;
       const { x, y, zoom } = action?.payload;
       state.viewportPosition = { x, y, zoom }
     },
-    [addNode.fulfilled]: (state, action) => {
+    [FlowAsyncThunks.addNode.fulfilled]: (state, action) => {
       if (!action?.payload) return;
       const { node, data } = action?.payload;
       if (!node || !data.id) return;
@@ -634,13 +92,18 @@ const FlowSlice = createSlice({
         new: true
       }
     },
-    [deleteNode.fulfilled]: (state, action) => {
+    [FlowAsyncThunks.deleteNode.fulfilled]: (state, action) => {
       if (!action?.payload) return;
       const { id } = action?.payload;
       if (!id) return;
       state.nodes = state.nodes.filter((node) => node.id !== id);
+      state.dataTree[id].parents.forEach(parent => {
+        const parentNode = state.dataTree[parent.id]
+        parentNode.children = parentNode.children.filter(child => child.id != id)
+      })
+      delete state.dataTree[id]
     },
-    [changePublicNodeData.fulfilled]: (state, action) => {
+    [FlowAsyncThunks.changePublicNodeData.fulfilled]: (state, action) => {
       if (!action?.payload) return;
       const { node, id } = action?.payload;
       if (!id || !node) return;
@@ -648,7 +111,7 @@ const FlowSlice = createSlice({
       if (!existNode) return;
       existNode.data.publicData = node.data;
     },
-    [addEdge.fulfilled]: (state, action) => {
+    [FlowAsyncThunks.addEdge.fulfilled]: (state, action) => {
       if (!action?.payload) return;
       const { edge, data } = action?.payload;
       if (!data.id || !edge) return;
@@ -657,37 +120,36 @@ const FlowSlice = createSlice({
       const target = state.dataTree[edge.target]
       const source = state.dataTree[edge.source]
       target.parents.push({
+        edgeId: edge._id,
         id: edge.source,
-        sourceKey: edge.sourceHandle,
+        sourceKey: edge.sourceKey,
       })
       source.children.push({
+        edgeId: edge._id,
         id: edge.target,
+        targetKey: edge.targetKey,
       });
     },
-    [autoSetUsedKeys.fulfilled]: (state, action) => {
-      if (!action?.payload) return;
-      const { newUsedKeys } = action?.payload;
-
-      newUsedKeys.forEach(update => {
-        const node = state.dataTree[update.nodeId]
-        node.usedKeys = update.usedKeys
-        node.new = false
-      })
-    },
-    [updateUsedKeys.fulfilled]: (state, action) => {
+    [FlowAsyncThunks.updateUsedKeys.fulfilled]: (state, action) => {
       if (!action?.payload) return;
       const { id, usedKeys } = action?.payload;
       const node = state.dataTree[id]
       node.usedKeys = usedKeys
       node.new = false
     },
-    [updateOutputKeys.fulfilled]: (state, action) => {
+    [FlowAsyncThunks.updateOutputKeys.fulfilled]: (state, action) => {
       if (!action?.payload) return;
       const { id, outputKeys } = action?.payload;
       const node = state.dataTree[id]
       node.outputKeys = outputKeys
     },
-    [changeUsedKeysState.fulfilled]: (botState, action) => {
+    [FlowAsyncThunks.updateHandles.fulfilled]: (state, action) => {
+      if (!action?.payload) return;
+      const { id, handles } = action?.payload;
+      const node = state.dataTree[id]
+      node.handles = handles
+    },
+    [FlowAsyncThunks.changeUsedKeysState.fulfilled]: (botState, action) => {
       if (!action?.payload) return;
       const { nodeIds, links, state } = action?.payload;
       nodeIds.forEach(childid => {
@@ -700,31 +162,17 @@ const FlowSlice = createSlice({
         node.usedKeys = newUsedKeys
       })
     },
-    [detachUsedKeys.fulfilled]: (botState, action) => {
+    [FlowAsyncThunks.updateBranch.fulfilled]: (state, action) => {
       if (!action?.payload) return;
-      const { nodeIds, links, state } = action?.payload;
-      nodeIds.forEach(childid => {
-        const node = botState.dataTree[childid]
-        const newUsedKeys = node.usedKeys.map(usedKey => {
-          if (links.find(dataLink => dataLink === usedKey.link))
-            return { ...usedKey, state }
-          return usedKey
-        })
-        node.usedKeys = newUsedKeys
+      const { usedKeys } = action?.payload;
+
+      usedKeys.forEach(update => {
+        const node = state.dataTree[update.nodeId]
+        node.usedKeys = update.usedKeys
+        node.new = false
       })
     },
-    [renameUsedKeys.fulfilled]: (state, action) => {
-      if (!action?.payload) return;
-      const { nodeIds, links, name } = action?.payload;
-      nodeIds.forEach(childid => {
-        const node = state.dataTree[childid]
-        node.usedKeys.forEach(usedKey => {
-          if (links.find(dataLink => dataLink === usedKey.link))
-            usedKey.name = name
-        })
-      })
-    },
-    [deleteEdge.fulfilled]: (state, action) => {
+    [FlowAsyncThunks.deleteEdge.fulfilled]: (state, action) => {
       if (!action?.payload) return;
       const { edge } = action?.payload;
       const oldEdge = edge;
@@ -734,8 +182,12 @@ const FlowSlice = createSlice({
         .filter((parent) => parent.id !== oldEdge.source);
       state.dataTree[oldEdge.source].children = state.dataTree[oldEdge.source].children
         .filter((child) => child.id !== oldEdge.target);
+      const target = state.dataTree[edge.target]
+      const source = state.dataTree[edge.source]
+      target.parents.filter(parent => parent.edgeId != oldEdge.id)
+      source.children.filter(child => child.edgeId != oldEdge.id)
     },
-    [deleteEdgeByNodeIdAndKey.fulfilled]: (state, action) => {
+    [FlowAsyncThunks.deleteEdgeByNodeIdAndKey.fulfilled]: (state, action) => {
       if (!action?.payload) return;
       const { id, key } = action?.payload;
       if (!id || !key) return;
@@ -750,6 +202,9 @@ const FlowSlice = createSlice({
     },
   },
   reducers: {
+    setSelectedNodeId(state, action) {
+      state.selectedNodeId = action.payload.nodeId
+    },
     onNodesChange(state, action) {
       state.nodes = applyNodeChanges(action.payload.nodes, state.nodes);
     },
@@ -770,6 +225,7 @@ const FlowSlice = createSlice({
 });
 
 export const {
+  setSelectedNodeId,
   changePrivateNodeData,
   resetFlowData,
   onNodesChange,

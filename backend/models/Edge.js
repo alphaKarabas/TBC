@@ -7,6 +7,12 @@ const Edge = new Schema({
   sourceKey: {type: String, required: true},
   target: {type: ObjectId, required: true},
   targetKey: {type: String, required: true},
+  flow: [
+    {
+      nodeId: {type: ObjectId, required: true},
+      sourceKey: {type: String, required: true},
+    }
+  ]
 })
 
 module.exports = connect.model("Edge", Edge);

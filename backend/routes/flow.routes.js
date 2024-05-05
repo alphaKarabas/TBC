@@ -20,5 +20,6 @@ router.delete("/node/:id", [authMiddleware, ruleMiddleware], FlowController.dele
 
 router.post("/edge", [authMiddleware, ruleMiddleware], FlowController.addEdge);
 router.delete("/edge", [authMiddleware, ruleMiddleware], FlowController.deleteEdge);
+router.patch("/edge/flow/set", [authMiddleware, ruleMiddleware], FlowController.setFlow);
 
 module.exports = router;

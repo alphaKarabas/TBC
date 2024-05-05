@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { collectAvailableDataLinksByTypes, updateUsedKeys } from '../../store/FlowSlice';
+import { updateUsedKeys } from '../../store/FlowAsyncThunks';
+import { collectAvailableDataOn, addStateToUsedKey } from '../../dataTreeMethods';
 import moduleDataTypes from "./moduleDataTypes";
 import { useSelector, useDispatch } from "react-redux";
 
@@ -10,25 +11,27 @@ function useAvailableData(id, inputKey) {
   const dataTree = useSelector((state) => state.FlowSlice.dataTree);
 
   const setData = (name) => {
-    const newUsedKeys = dataTree[id].usedKeys.filter(usedKey => usedKey.name != dataName)
-    const usedKey = { ...availableData[name], inputKey }
-    newUsedKeys.push(usedKey)
-    dispatch(updateUsedKeys({ id, usedKeys: newUsedKeys }))
+    const node = dataTree[id]
+    const usedKeys = node.usedKeys.filter(usedKey => usedKey.inputKey != inputKey)
+    const newUedKey = addStateToUsedKey({ ...availableData[name], inputKey }, name ? 'connected' : 'serialized')
+    usedKeys.push(newUedKey)
+    dispatch(updateUsedKeys({ id, usedKeys }))
   }
 
   useEffect(() => {
-    const newAvailableData = collectAvailableDataLinksByTypes(dataTree, id);
-
+    console.log('useEffect');
+    const data = collectAvailableDataOn(dataTree, id, "target");
     const type = moduleDataTypes[dataTree[id].moduleId].inputs
       .find(input => input.key == inputKey).type
     const usedKeys = dataTree[id].usedKeys;
     const usedKey = usedKeys.find(usedKey => usedKey.inputKey === inputKey);
     let newName = ''
-    if (usedKey.state == 'connected')
-      newName = dataTree[usedKey.sourceId].outputKeys[usedKey.outputKey].name;
+    if (usedKey.state == 'connected') {
+      newName = usedKey.name;
+    }
 
-    setAvailableData(newAvailableData[type] || []);
-    setDataName(newName);
+    setAvailableData(data[type] || []);
+    setDataName(usedKey.name);
   }, [dataTree, id, inputKey]);
 
   return [dataName, availableData, setData];

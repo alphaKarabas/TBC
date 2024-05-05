@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Position, Handle } from "reactflow";
 import useAutoSave from '../useAutoSave';
 import OutputDataName from './tools/OutputDataName';
@@ -26,16 +26,18 @@ function CommandNodeType({ data }) {
 }
 
 function CommandSidebar({ id, data }) {
-  const [command, setCommand] = useAutoSave(id, data);
+  const [node_data, setData] = useAutoSave(id, data);
+
   return (
     <div>
       <section>
         <h4>Command</h4>
         <input
           name="text"
-          value={command.telegramCommand}
+          value={node_data.telegramCommand}
           onChange={(e) => {
-            setCommand({ telegramCommand: e.target.value });
+            const newData = { telegramCommand: e.target.value }
+            setData(newData);
           }}
         />
       </section>

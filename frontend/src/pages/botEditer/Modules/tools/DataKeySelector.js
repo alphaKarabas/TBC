@@ -7,7 +7,6 @@ function DataKeySelector({ id, inputKey }) {
         setData(event.target.value);
         console.log('Выбранное значение:', event.target.value);
     };
-
     return <select value={dataName} onChange={(event) => handleChange(event)}>
         <option value="">Select name</option>
         {Object.keys(availableData).map(key =>

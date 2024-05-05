@@ -3,10 +3,12 @@ import { Position, Handle } from "reactflow";
 import useAutoSave from '../useAutoSave';
 import DataKeySelector from './tools/DataKeySelector';
 import OutputDataName from './tools/OutputDataName';
+import KeyboardWithHandles from './tools/KeyboardWithHandles';
+import KeyboardWithHandlesView from './tools/KeyboardWithHandlesView';
 
 function QuestionNodeType({ data }) {
   return (
-    <div>
+    <div style={{width: '200px'}}>
       <div>{data.text}</div>
       <Handle
         key="target"
@@ -34,15 +36,22 @@ function QuestionNodeType({ data }) {
         position={Position.Right}
         id="main-source"
       />
+      <KeyboardWithHandlesView keyboard={data.keyboard}/>
     </div>
   );
 }
 
 function QuestionSidebar({ id, data }) {
-  const [keys, setKeys] = useAutoSave(id, data);
+  const [nodeData, setNodeData] = useAutoSave(id, data);
+  
   const setKey = (key, value) => {
-    const newKeys = { ...keys, [key]: value };
-    setKeys(newKeys)
+    const newKeys = { ...nodeData, [key]: value };
+    setNodeData(newKeys)
+  }
+
+  const setKeyboard = (keyboard) => {
+    const newData = { ...nodeData, keyboard }
+    setNodeData(newData);
   }
 
   return (
@@ -51,11 +60,16 @@ function QuestionSidebar({ id, data }) {
       <h4>Text</h4>
         <textarea
           name="text"
-          value={keys['text']}
+          value={nodeData.text}
           onChange={(e) => {
             setKey('text', e.target.value);
           }}
         />
+      </section>
+      <hr />
+      <section>
+        <h4>KeyboardWithHandles</h4>
+        <KeyboardWithHandles id={id} keyboard={nodeData.keyboard} setKeyboard={setKeyboard} prefix='keyboard-' />
       </section>
       <hr />
       <section>

@@ -1,6 +1,16 @@
 import { NodeProvider, useNodeActions } from "./NodeProvider";
+import { useDispatch } from "react-redux";
+import {
+  setSelectedNodeId
+} from "../../store/FlowSlice.js";
 
 const NodeTypeContainer = ({ NodeType, data, nodeInfo }) => {
+  const dispatch = useDispatch();
+
+  const onClick = () => {
+    dispatch(setSelectedNodeId({ nodeId: nodeInfo.id }))
+  }
+
   const { deleteNode } = useNodeActions();
   return (
     <div className="node">
@@ -25,7 +35,7 @@ const NodeTypeContainer = ({ NodeType, data, nodeInfo }) => {
           onClick={() => deleteNode()}
         ></button>
       </div>
-      <div>
+      <div onClick={onClick}>
         <NodeType id={nodeInfo.id} data={data.publicData} nodeInfo={nodeInfo} />
       </div>
     </div>

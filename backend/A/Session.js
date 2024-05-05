@@ -65,12 +65,12 @@ class Session {
     this.currentNodeId = nextNode._id;
   };
 
-  activateNode = async (node) => {
+  activateNode = async (node, flow) => {
     const data = this.getData(node)
     const listener = ModuleList.get(node.moduleId).listeners['activation']
     const apiFactory = new ApiFactory(node, this.bot);
     const bot = await apiFactory.createUniversalApi();
-    const api = { id: node.id, data, node: node.data, next: this.getMethodNext(node), bot }
+    const api = { id: node.id, data, node: node.data, next: this.getMethodNext(node, flow), bot }
     this.useModule(api, listener, node);
   };
 
@@ -83,14 +83,61 @@ class Session {
     return data
   }
 
-  getMethodNext = (node) => {
+
+
+
+
+  isForkOrTrigger = (node) => {
+    const nodeModule = ModuleList.get(node.moduleId)
+    return nodeModule.targets.length == 0 || nodeModule.sources.length > 1;
+  }
+
+  getReferencePoint = (id, sourceKey, data = {}) => {
+    return { id, sourceKey, link: `${id}_${sourceKey}`, data }
+  }
+
+  addReferencePoint = (flow, nodeId, data = {}, sourceKey) => {
+    flow.push(this.getReferencePoint(nodeId, sourceKey, data))
+  }
+
+  concatData = (oldData, newData) => {
+    const data = { ...oldData }
+    Object.keys(newData).forEach(type => {
+      if (!data[type]) data[type] = {};
+      data[type] = {
+        ...data[type],
+        ...newData[type]
+      }
+    })
+    return data;
+  }
+
+  addDataToFlow = (flow, data) => {
+    const referencePoint = flow[flow.length - 1]
+    referencePoint.data = this.concatData(referencePoint.data, data)
+  }
+
+  loadNodeToFlow = (node, flow, data, sourceKey) => {
+    if (this.isForkOrTrigger(node)) {
+      this.addReferencePoint(flow, node.id, data, sourceKey)
+    } else if (flow.length > 0) {
+      this.addDataToFlow(flow, data)
+    }
+    return flow
+  }
+
+
+
+
+
+  getMethodNext = (node, flow=[]) => {
     const next = async (sourceKey, data) => {
       if (ModuleList.get(node.moduleId).type == 'sessional')
-        await this.releaseSession()
-      this.insertNodesData(node, data)
-      const nextNodes = await this.getNextNodes(node._id, sourceKey);
-      nextNodes.forEach(nextNode => {
-        this.procesNextNode(nextNode);
+        await this.releaseSession();
+      const updatedFlow = this.loadNodeToFlow(node, flow, data, sourceKey);
+      const nextPaths = await this.getNextPaths(node._id, sourceKey);
+      nextPaths.forEach(nextPath => {
+        this.procesNextPath(nextPath, updatedFlow);
       });
     };
     return next.bind(this);
@@ -104,15 +151,16 @@ class Session {
     const nextSessionNodeId = this.sessionNodeQueue.shift();
     const nextSessionNode = await Node.findById(nextSessionNodeId);
     if (nextSessionNode) {
+      if (!this.isNodeReady(nextSessionNodeId)) return;
       this.handOverControl(nextSessionNode);
-      this.activateNode(nextSessionNode);
+      this.activateNode(nextSessionNode, flow);
     } else {
       this.currentNodeTemporaryStorage = null;
       this.currentNodeId = null;
     }
   };
 
-  getNextNodes = async (nodeId, sourceKey) => {
+  getNextPaths = async (nodeId, sourceKey) => {
     const edges = await Edge.find({
       source: nodeId,
       sourceKey,
@@ -121,68 +169,81 @@ class Session {
     if (!edges) return;
     const nodePromises = edges.map(edge => Node.findById(edge.target))
     const nodes = await Promise.all(nodePromises);
-    return nodes;
+
+    const paths = nodes.map((node, index) => ({
+      node: node,
+      edge: edges[index]
+    }));
+    return paths;
   };
 
-  procesNextNode = async (node) => {
+  procesNextPath = async (path, flow) => {
+    const { node } = path;
     const releaseNodesStateMutex = await this.nodesStateMutex.acquire();
     if (!(node._id in this.nodesState)) {
       this.nodesState[node._id] = {
-        waitingSignalsCount: await this.getWaitingSignalsCount(node) - 1,
-        waitingDataList: this.getWaitingDataList(node),
+        waitingFlows: await this.getWaitingFlows(path, flow),
       };
     } else {
-      this.nodesState[node._id].waitingSignalsCount--;
+      console.log('procesNextPath', flow, node);
+
+
     }
     releaseNodesStateMutex();
+    console.log('procesNextPath END', flow, this.nodesState[node._id]);
 
-    if (this.isNodeReady(node._id)) {
-      if (ModuleList.get(node.moduleId).type == 'sessional') {
+    // if (this.isNodeReady(node._id)) {
+    //   if (ModuleList.get(node.moduleId).type == 'sessional') {
 
-        if (this.currentNodeId != null) this.sessionNodeQueue.push(node._id)
-        else {
-          this.activateNode(node)
-          this.handOverControl(node);
-        }
-      } else {
-        {
-          this.activateNode(node)
-        }
-      }
+    //     if (this.currentNodeId != null) this.sessionNodeQueue.push(node._id)
+    //     else {
+    //       this.activateNode(node, flow)
+    //       this.handOverControl(node);
+    //     }
+    //   } else {
+    //     {
+    //       this.activateNode(node, flow)
+    //     }
+    //   }
 
-    } else {
-    }
+    // } else {
+    // }
   }
 
-  getWaitingSignalsCount = async (node) => {
-    const edges = await Edge.find({ target: node.id });
-    return edges.length;
-  }
-
-  getWaitingDataList = (node) => {
-    const waitingDataList = []
-    node.usedKeys.forEach(usedKey => {
+  getWaitingFlows = async (path, comingFlow) => {
+    const { edge, node } = path;
+    let waitingFlows = []
+    for (const usedKey of node.usedKeys) {
       if (usedKey.state == 'disconnected') {
-        waitingDataList.push({ 'link': '' })
         console.error(`The NODE: {id: ${node._id}, module: ${node.moduleId}}, is missing input: '${usedKey.inputKey}', which is disconnected!\nData:`, node.data);
+        return null;
       } else if (usedKey.state == 'connected') {
-        waitingDataList.push({
-          'inputKey': usedKey.inputKey,
-          'link': usedKey.link,
-        })
+        const edges = await Edge.find({ target: node.id });
+        const potentiallyWaitingEdges = edges.filter(e => e._id != edge._id)
+        const flows = potentiallyWaitingEdges.map(e => e.flow)
+        console.log(edges, potentiallyWaitingEdges);
+        let temporaryWaitingFlows = [{ comingFlow, isReady: true }]
+        for (let i = 0; i < comingFlow.length; i++) {
+          flows.forEach(flow => {
+            if (!flow.length) return;
+            const { target, sourceKey } = flow[i]
+            const { cTarget, cSourceKey } = comingFlow[i]
+            if (target == cTarget && sourceKey, cSourceKey)
+              temporaryWaitingFlows.push({ ...flow[i], isReady: false })
+          })
+          if (temporaryWaitingFlows.length) {
+            waitingFlows = temporaryWaitingFlows;
+            temporaryWaitingFlows = [];
+          } else {
+            return waitingFlows;
+          }
+        }
       } else if (isRequired(node, usedKey.inputKey)) {
-        waitingDataList.push({ 'link': '' })
         console.error(`The NODE: {id: ${node._id}, module: ${node.moduleId}}, is missing input: '${usedKey.inputKey}', which is required!\nData:`, node.data);
+        return null;
       }
-    })
-    return waitingDataList
-  }
-
-  insertNodesData = (node, data) => {
-    for (let key in data) {
-      if (node.outputKeys.get(key).inUse)
-        this.nodesData[`${node._id}_${key}`] = data[key];
     }
+    return waitingFlows
   }
 
   isNodeReady = (nodeId) => {

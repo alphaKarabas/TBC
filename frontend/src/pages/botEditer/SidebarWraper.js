@@ -1,4 +1,15 @@
-function SidebarWraper({ Sidebar, node, close }) {
+import { useDispatch } from "react-redux";
+import {
+    setSelectedNodeId
+} from "../../store/FlowSlice.js";
+
+function SidebarWraper({ Sidebar, node }) {
+    const dispatch = useDispatch();
+
+    const close = () => {
+      dispatch(setSelectedNodeId({ nodeId: null }))
+    }
+    
     const data = node.data.publicData;
     return (
         <div style={{ width: '400px', border: '1px solid black' }}>

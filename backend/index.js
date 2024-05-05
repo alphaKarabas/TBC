@@ -9,6 +9,7 @@ const App = require("./A/App");
 const config = require("config");
 require("./databaseInitializer");
 const PORT = config.get("serverPort");
+require("./collectAvailableDataLinks");
 
 app.use(corsMiddleware);
 app.use(express.json());
@@ -21,35 +22,7 @@ const start = async () => {
   try {
     await new App().start();
     app.listen(PORT, () => console.log("Start " + PORT));
-  } catch (e) {}
+  } catch (e) { }
 };
 
 start();
-
-// const mongoose = require('mongoose');
-
-
-// const start = async () => {
-//   try {
-//     const connect = await mongoose.connect('mongodb://127.0.0.1/tBotMongo');
-
-//     const Schema = mongoose.Schema;
-//     const ObjectId = Schema.ObjectId;
-
-//     const BlogPostSchema = new Schema({
-//       author: ObjectId,
-//       title: String,
-//     });
-
-//     BlogPost = connect.model("BlogPost", BlogPostSchema);
-
-//     const instance = new BlogPost({ title: 'AFASFASF' });
-//     await instance.save();
-//   } catch (e) { 
-//     console.log(e);
-//   }
-// };
-
-// start();
-
-

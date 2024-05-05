@@ -23,7 +23,6 @@ class FlowController {
     const { outputKeys } = req.body;
     if (!(typeof outputKeys === 'object'))
       return res.status(400).json({ message: "Invalid output keys" });
-    console.log(outputKeys);
     return await updateNodeIfAuthorized(req, res, { outputKeys });
   };
 
@@ -37,7 +36,7 @@ class FlowController {
 
   updateHandles = async (req, res) => {
     const { handles } = req.body;
-    if (!(typeof outputKeys === 'handles'))
+    if (!(typeof handles === 'object'))
       return res.status(400).json({ message: "Invalid handles" });
 
     return await updateNodeIfAuthorized(req, res, { handles });
@@ -102,13 +101,13 @@ class FlowController {
   };
 
   setUsedKeys = async (req, res) => {
-    const { newUsedKeys } = req.body;
-    if (!Array.isArray(newUsedKeys))
+    const { updates } = req.body;
+    if (!Array.isArray(updates))
       return res.status(400).json({ message: "Invalid new Used Keys" });
 
     try {
-      for (const update of newUsedKeys) {
-        await Node.updateOne( 
+      for (const update of updates) {
+        await Node.updateOne(
           { _id: update.nodeId },
           {
             $set: {
@@ -117,6 +116,38 @@ class FlowController {
             }
           }
         );
+      }
+
+      return res.status(202).json({
+        message: "Used keys updated",
+      });
+    } catch (error) {
+      console.log(error);
+      return res.status(500).json({ message: "Used keys updated" });
+    }
+  };
+
+  setFlow = async (req, res) => {
+    const { updates } = req.body;
+    if (!Array.isArray(updates))
+      return res.status(400).json({ message: "Invalid new Flow" });
+    try {
+    console.log(updates);
+
+      for (const update of updates) {
+      console.log(update.flow);
+
+        const a = await Edge.updateOne(
+          {
+            _id: update.edgeId,
+          },
+          {
+            $set: {
+              flow: update.flow
+            }
+          }
+        );
+        console.log(a);
       }
 
       return res.status(202).json({
@@ -294,7 +325,7 @@ class FlowController {
 
       const accessOk = await accessCheckByFlowId(req.user.id, flowId);
       if (!accessOk) return res.status(403).json({ message: "Access denied" });
-      
+
       const node = new Node({
         flowId: flowId,
         moduleId: moduleId,

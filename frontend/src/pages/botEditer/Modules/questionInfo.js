@@ -1,4 +1,7 @@
-const questionDefaultData = { 'text': '' }
+const questionDefaultData = {
+  text: '',
+  keyboard: [[{ text: 'Text', key: 'keyboard_0000' }]]
+}
 
 const questionTypes = {
   inputs: [
@@ -21,6 +24,7 @@ const questionDefaultHandles = {
   ],
   sources: [
     'main-source',
+    'keyboard_0000'
   ],
 }
 

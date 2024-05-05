@@ -1,5 +1,6 @@
 const listeners = {
   command: async ({ msg, next }) => {
+    console.log('command');
     next("main-source", {
       'message-id': msg.message_id,
       'chat-id': msg.chat.id,

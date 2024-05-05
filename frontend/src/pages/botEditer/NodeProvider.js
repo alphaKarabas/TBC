@@ -4,18 +4,23 @@ import {
     changePublicNodeData,
     deleteEdgeByNodeIdAndKey,
     deleteNode,
-  } from "../../store/FlowSlice.js";
+} from "../../store/FlowAsyncThunks.js";
+import {
+    setSelectedNodeId
+} from "../../store/FlowSlice.js";
 
 const NodeContext = createContext(null);
 
 const NodeProvider = ({ children, id, node }) => {
     const dispatch = useDispatch();
-// console.log(node);
-    const saveData = (data) => 
+    // console.log(node);
+    const saveData = (data) =>
         dispatch(changePublicNodeData({ id, data }));
 
-    const deleteSelf = () => 
+    const deleteSelf = () => {
+        dispatch(setSelectedNodeId({ nodeId: null }));
         dispatch(deleteNode({ id }));
+    }
 
     const removEdges = async (key) => {
         await dispatch(deleteEdgeByNodeIdAndKey({ id, key })).unwrap();
@@ -32,4 +37,4 @@ const NodeProvider = ({ children, id, node }) => {
 
 const useNodeActions = () => useContext(NodeContext);
 
-export {NodeProvider, useNodeActions}
+export { NodeProvider, useNodeActions }

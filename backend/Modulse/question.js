@@ -1,5 +1,6 @@
 const listeners = {
   message: async ({ msg, node, data, next, bot }) => {
+    console.log(node);
     next("main-source", {
       'answer': msg.text
     });

@@ -2,18 +2,19 @@ import React, { useEffect, useRef, useState, useCallback } from "react";
 import ReactFlow, { useOnViewportChange } from "reactflow";
 import { useSelector, useDispatch } from "react-redux";
 import {
-  resetFlowData,
-  onNodesChange,
-  onEdgesChange,
   deleteEdge,
   addEdge,
-  autoSetUsedKeys,
   addNode,
   loadFlow,
   savePosition,
   saveViewportPosition,
-  detachUsedKeys
-} from "../../store/FlowSlice";
+  updateBranch
+} from "../../store/FlowAsyncThunks.js";
+import {
+  resetFlowData,
+  onNodesChange,
+  onEdgesChange,
+} from "../../store/FlowSlice.js";
 import "./index.css";
 import moduleTypes from "./moduleTypes";
 import moduleSidebars from "./moduleSidebars.js";
@@ -26,26 +27,20 @@ import { NodeProvider } from "./NodeProvider";
 const Window = () => {
   const dispatch = useDispatch();
   const nodes = useSelector((state) => state.FlowSlice.nodes);
+  const selectedNodeId = useSelector((state) => state.FlowSlice.selectedNodeId);
   const currentBotId = useSelector((state) => state.BotListSlice.currentBotId);
   const flowId = useSelector((state) => state.FlowSlice.flowId);
   const [selectedNode, setSelectedNode] = useState(null);
-  const [isSidebarOpen, setSidebarOpen] = useState(false);
   const Sidebar = selectedNode ? moduleSidebars[selectedNode.data.privateData.moduleId] : null;
 
   useEffect(() => {
-    const nodeExists = nodes.some(node => node.id === selectedNode?.id);
-    if (!nodeExists) {
-      setSidebarOpen(false);
+    if (selectedNodeId) {
+      const node = nodes.find(node => node.id === selectedNodeId)
+      setSelectedNode(node);
+    } else {
       setSelectedNode(null);
     }
-  }, [nodes, selectedNode]);
-
-  const onNodeClick = (event, node) => {
-    if (nodes.find(n => n.id === node.id)) {
-      setSelectedNode(node);
-      setSidebarOpen(true);
-    }
-  };
+  }, [selectedNodeId, nodes]);
 
   const onDragStart = (event, moduleId) => {
     event.dataTransfer.setData(
@@ -73,17 +68,17 @@ const Window = () => {
       >
         <NodeSections onDragStart={onDragStart} />
       </aside>
-      <Flow onNodeClick={onNodeClick} />
-      {isSidebarOpen &&
+      <Flow />
+      {selectedNode &&
         <NodeProvider id={selectedNode.id} node={selectedNode}>
-          <SidebarWraper key={selectedNode.id} Sidebar={Sidebar} node={selectedNode} close={() => setSidebarOpen(false)} />
+          <SidebarWraper key={selectedNode.id} Sidebar={Sidebar} node={selectedNode} />
         </NodeProvider>
       }
     </div>
   );
 };
 
-function Flow({ onNodeClick }) {
+function Flow() {
   const nodes = useSelector((state) => state.FlowSlice.nodes);
   const edges = useSelector((state) => state.FlowSlice.edges);
   const isLoaded = useSelector((state) => state.FlowSlice.isLoaded);
@@ -101,8 +96,15 @@ function Flow({ onNodeClick }) {
   });
 
   const onConnect = async (edge) => {
-    await dispatch(addEdge({ flowId: flowId, edge: edge }));
-    dispatch(autoSetUsedKeys({ sourceId: edge.source, targetId: edge.target }));
+    const { payload } = await dispatch(addEdge({ flowId: flowId, edge: edge }));
+    const newEdge = payload.edge;
+    dispatch(updateBranch({ nodeId: newEdge.target, edgeId: newEdge._id }));
+  };
+
+  const onDisonnect = async (edge) => {
+    const { payload } = await dispatch(deleteEdge({ edge }));
+    const oldEdge = payload.edge;
+    dispatch(updateBranch({ nodeId: oldEdge.target, edgeId: oldEdge.id }));
   };
 
   const onEdgeUpdateStart = () => {
@@ -116,16 +118,14 @@ function Flow({ onNodeClick }) {
       oldEdge.sourceHandle !== newConnection.sourceHandle ||
       oldEdge.targetHandle !== newConnection.targetHandle
     ) {
-      await dispatch(detachUsedKeys({ sourceId: oldEdge.source, targetId: oldEdge.target }));
-      dispatch(deleteEdge({ edge: oldEdge }));
+      onDisonnect(oldEdge);
     }
     edgeUpdateSuccessful.current = true;
   };
 
   const onEdgeUpdateEnd = async (_, edge) => {
     if (!edgeUpdateSuccessful.current) {
-      await dispatch(detachUsedKeys({ sourceId: edge.source, targetId: edge.target }));
-      dispatch(deleteEdge({ edge }));
+      onDisonnect(edge);
     }
     edgeUpdateSuccessful.current = true;
   };
@@ -196,10 +196,7 @@ function Flow({ onNodeClick }) {
           edges={edges}
           onNodesChange={(nodes) => dispatch(onNodesChange({ nodes: nodes }))}
           onEdgesChange={(edges) => dispatch(onEdgesChange({ edges: edges }))}
-          onEdgeDoubleClick={async (_, edge) => { 
-            await dispatch(detachUsedKeys({ sourceId: edge.source, targetId: edge.target }));
-            dispatch(deleteEdge({ edge }))
-          }}
+          onEdgeDoubleClick={async (_, edge) => onDisonnect(edge)}
           onConnect={onConnect}
           onEdgeUpdate={onEdgeUpdate}
           onEdgeUpdateStart={onEdgeUpdateStart}
@@ -210,7 +207,6 @@ function Flow({ onNodeClick }) {
           onInit={setReactFlowInstance}
           onDrop={onDrop}
           onDragOver={onDragOver}
-          onNodeClick={onNodeClick}
           defaultViewport={viewportPosition}
           minZoom={0.2}
         ></ReactFlow>

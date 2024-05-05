@@ -7,8 +7,6 @@ function useAutoSave(id, initialState) {
 
   useEffect(() => {
     const handleSave = () => {
-      console.log(state);
-
       saveData(state);
     };
 
