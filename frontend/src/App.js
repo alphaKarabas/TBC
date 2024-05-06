@@ -3,13 +3,15 @@ import { Route, Routes } from "react-router-dom";
 import { useDispatch } from "react-redux";
 import { auth } from "./store/UserSlice";
 import Loading from "./pages/Loading";
-import { Dashboard, UserBots } from "./pages/botMenegment";
-import { Welcome, Registration } from "./pages/home";
+import Dashboard from "./pages/Dashboard";
+import UserBots from "./pages/ControlPanel";
+import Welcome from "./pages/Welcome";
+import Registration from "./pages/Registration";
 import { RequireAuth } from "./hoc/RequireAuth";
 
-const Home = lazy(() => import("./pages/home"));
-const BotMenegment = lazy(() => import("./pages/botMenegment"));
-const BotEditer = lazy(() => import("./pages/botEditer"));
+const Home = lazy(() => import("./pages/Home"));
+const BotMenegment = lazy(() => import("./pages/BotMenegment"));
+const BotEditer = lazy(() => import("./pages/BotEditer"));
 
 export default function App() {
   const dispatch = useDispatch();

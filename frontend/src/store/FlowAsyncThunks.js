@@ -1,8 +1,8 @@
 import axios from "axios";
 import { createAsyncThunk } from "@reduxjs/toolkit";
-import { getBranchUpdate, getChildrenUpdate } from "../dataTreeMethods";
-import moduleDataTypes from "../pages/botEditer/moduleDataTypes";
-import moduleDefaultHandles from "../pages/botEditer/moduleDefaultHandles";
+import { getBranchUpdate, getChildrenUpdate } from "../tools/dataTreeMethods";
+import moduleDataTypes from "../moduleInfo/dataTypes";
+import moduleDefaultHandles from "../moduleInfo/defaultHandles";
 
 export const loadFlow = createAsyncThunk(
   "flow/fetchFlow",

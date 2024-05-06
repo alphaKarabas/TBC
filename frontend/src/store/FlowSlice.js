@@ -1,8 +1,8 @@
 import { createSlice } from "@reduxjs/toolkit";
 import { applyEdgeChanges, applyNodeChanges } from "reactflow";
-import moduleDataTypes from "../pages/botEditer/moduleDataTypes";
-import moduleDefaultHandles from "../pages/botEditer/moduleDefaultHandles";
-import { buildTree } from "../dataTreeMethods";
+import moduleDataTypes from "../moduleInfo/dataTypes";
+import moduleDefaultHandles from "../moduleInfo/defaultHandles";
+import { buildTree } from "../tools/dataTreeMethods";
 import * as FlowAsyncThunks from "./FlowAsyncThunks"
 
 const FlowSlice = createSlice({
